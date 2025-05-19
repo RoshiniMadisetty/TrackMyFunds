@@ -4,133 +4,67 @@
 #include <time.h>
 #include <ctype.h>
 
-#define MAX_NAME 50
-#define MAX_PASS 50
+#define MAX_LEN 100
 #define USER_FILE "users.txt"
 
 typedef struct {
-    char type[10];
-    char category[20];
+    char type[10];       // "INCOME" or "EXPENSE"
+    char category[20];   // e.g. "FOOD", "RENT"
     float amount;
-    char date[30];
+    char date[30];       // Date and Time string
 } Transaction;
 
-Transaction transactions[1000];
+Transaction *transactions = NULL;
 int transactionCount = 0;
 float totalIncome = 0, totalExpenses = 0;
-char currentUser[MAX_NAME];
-int isLoggedIn = 0;
+char currentUser[50];
 
 void getCurrentTime(char* buffer) {
     time_t now = time(NULL);
-    struct tm* t = localtime(&now);
-    strftime(buffer, 30, "%d-%m-%Y %I:%M:%S %p", t);
+    struct tm *t = localtime(&now);
+    strftime(buffer, 30, "%d-%m-%Y %I:%M:%S %p", t);  // Indian format
 }
 
-void toUpperStr(char* str) {
-    for (int i = 0; str[i]; i++) {
-        str[i] = toupper(str[i]);
-    }
+void toUpperStr(char *str) {
+    for (int i = 0; str[i]; i++) str[i] = toupper(str[i]);
 }
 
-void saveToFile() {
-    char filename[MAX_NAME + 15];
-    sprintf(filename, "%s_data.txt", currentUser);
+void saveTransaction() {
+    char filename[100];
+    sprintf(filename, "%s_transactions.txt", currentUser);
     FILE *f = fopen(filename, "w");
-    if (!f) return;
+    if (!f) {
+        perror("Failed to save transactions");
+        return;
+    }
+
+    fprintf(f, "%d %.2f %.2f\n", transactionCount, totalIncome, totalExpenses);
     for (int i = 0; i < transactionCount; i++) {
         fprintf(f, "%s %s %.2f %s\n",
-                transactions[i].type,
-                transactions[i].category,
-                transactions[i].amount,
-                transactions[i].date);
+            transactions[i].type,
+            transactions[i].category,
+            transactions[i].amount,
+            transactions[i].date);
     }
     fclose(f);
-    printf("Data saved successfully.\n");
 }
 
-void loadFromFile() {
-    char filename[MAX_NAME + 15];
-    sprintf(filename, "%s_data.txt", currentUser);
+void loadTransactions() {
+    char filename[100];
+    sprintf(filename, "%s_transactions.txt", currentUser);
     FILE *f = fopen(filename, "r");
     if (!f) return;
-    transactionCount = 0;
-    totalIncome = 0;
-    totalExpenses = 0;
-    while (fscanf(f, "%s %s %f %[^
-]",
-                  transactions[transactionCount].type,
-                  transactions[transactionCount].category,
-                  &transactions[transactionCount].amount,
-                  transactions[transactionCount].date) == 4) {
-        if (strcmp(transactions[transactionCount].type, "INCOME") == 0)
-            totalIncome += transactions[transactionCount].amount;
-        else if (strcmp(transactions[transactionCount].type, "EXPENSE") == 0)
-            totalExpenses += transactions[transactionCount].amount;
-        transactionCount++;
-    }
-    fclose(f);
-}
 
-int userExists(const char* username) {
-    FILE* f = fopen(USER_FILE, "r");
-    if (!f) return 0;
-    char uname[MAX_NAME], pword[MAX_PASS];
-    while (fscanf(f, "%s %s", uname, pword) != EOF) {
-        if (strcmp(uname, username) == 0) {
-            fclose(f);
-            return 1;
-        }
+    fscanf(f, "%d %f %f\n", &transactionCount, &totalIncome, &totalExpenses);
+    transactions = (Transaction*)malloc(sizeof(Transaction) * (transactionCount + 1));
+    for (int i = 0; i < transactionCount; i++) {
+        fscanf(f, "%s %s %f %[^\n]", 
+            transactions[i].type,
+            transactions[i].category,
+            &transactions[i].amount,
+            transactions[i].date);
     }
     fclose(f);
-    return 0;
-}
-
-int registerUser() {
-    char username[MAX_NAME], password[MAX_PASS];
-    printf("Enter username: ");
-    scanf("%s", username);
-    if (userExists(username)) {
-        printf("User already exists.\n");
-        return 0;
-    }
-    printf("Create password: ");
-    scanf("%s", password);
-    FILE* f = fopen(USER_FILE, "a");
-    if (!f) {
-        printf("Error saving data.\n");
-        return 0;
-    }
-    fprintf(f, "%s %s\n", username, password);
-    fclose(f);
-    printf("Registration successful. Please login.\n");
-    return 1;
-}
-
-int loginUser() {
-    char username[MAX_NAME], password[MAX_PASS];
-    printf("Enter username: ");
-    scanf("%s", username);
-    printf("Enter password: ");
-    scanf("%s", password);
-    FILE* f = fopen(USER_FILE, "r");
-    if (!f) {
-        printf("User file not found.\n");
-        return 0;
-    }
-    char uname[MAX_NAME], pword[MAX_PASS];
-    while (fscanf(f, "%s %s", uname, pword) != EOF) {
-        if (strcmp(username, uname) == 0 && strcmp(password, pword) == 0) {
-            strcpy(currentUser, username);
-            fclose(f);
-            loadFromFile();
-            isLoggedIn = 1;
-            return 1;
-        }
-    }
-    fclose(f);
-    printf("Invalid username or password.\n");
-    return 0;
 }
 
 void addTransaction() {
@@ -138,20 +72,29 @@ void addTransaction() {
     printf("Enter type (Income/Expense): ");
     scanf("%s", t.type);
     toUpperStr(t.type);
+
     if (strcmp(t.type, "INCOME") != 0 && strcmp(t.type, "EXPENSE") != 0) {
         printf("Invalid type!\n");
         return;
     }
-    printf("Enter category: ");
+
+    printf("Enter category (e.g., Food, Rent): ");
     scanf("%s", t.category);
     toUpperStr(t.category);
+
     printf("Enter amount: ");
     scanf("%f", &t.amount);
+
     getCurrentTime(t.date);
+
     if (strcmp(t.type, "INCOME") == 0) totalIncome += t.amount;
     else totalExpenses += t.amount;
+
+    transactions = realloc(transactions, sizeof(Transaction) * (transactionCount + 1));
     transactions[transactionCount++] = t;
-    printf("Transaction added successfully!\n");
+
+    printf("Transaction Added Successfully!\n");
+    saveTransaction();
 }
 
 void viewBalance() {
@@ -164,122 +107,220 @@ void viewTransactions() {
     printf("\n%-10s %-15s %-10s %-20s\n", "Type", "Category", "Amount", "Date");
     for (int i = 0; i < transactionCount; i++) {
         printf("%-10s %-15s %-10.2f %-20s\n",
-               transactions[i].type,
-               transactions[i].category,
-               transactions[i].amount,
-               transactions[i].date);
+            transactions[i].type,
+            transactions[i].category,
+            transactions[i].amount,
+            transactions[i].date);
     }
 }
 
 void categoryReport() {
-    char category[20];
-    printf("Enter category to report: ");
-    scanf("%s", category);
-    toUpperStr(category);
-    float total = 0;
+    printf("Available Categories:\n");
     for (int i = 0; i < transactionCount; i++) {
-        if (strcmp(transactions[i].category, category) == 0 && strcmp(transactions[i].type, "EXPENSE") == 0) {
+        printf("- %s\n", transactions[i].category);
+    }
+
+    char cat[20];
+    float total = 0;
+    printf("Enter category to report: ");
+    scanf("%s", cat);
+    toUpperStr(cat);
+
+    for (int i = 0; i < transactionCount; i++) {
+        if (strcmp(transactions[i].category, cat) == 0 &&
+            strcmp(transactions[i].type, "EXPENSE") == 0) {
             total += transactions[i].amount;
         }
     }
-    printf("Total spent on %s: %.2f\n", category, total);
+
+    printf("Total spent on %s: %.2f\n", cat, total);
 }
 
 void showGraphicalReport() {
+    printf("\n[ Budget Usage - Expense as Percentage of Income ]\n");
+    float percent = (totalIncome == 0) ? 0 : (totalExpenses / totalIncome) * 100;
+    int blocks = (int)(percent / 2);  // scale to 50 chars
+    if (blocks > 50) blocks = 50;
+
+    printf("|");
+    for (int i = 0; i < blocks; i++) printf("#");
+    for (int i = blocks; i < 50; i++) printf(".");
+    printf("| %.2f%% used\n", percent);
+
+    // Show per-category comparative report
     printf("\n[ Category Comparison - Expense Amounts ]\n");
+
+    // Collect unique categories
+    char categories[100][20];
+    float categorySums[100] = {0};
+    int catCount = 0;
+
     for (int i = 0; i < transactionCount; i++) {
-        if (strcmp(transactions[i].type, "EXPENSE") == 0) {
-            float amount = transactions[i].amount;
-            printf("%-15s |", transactions[i].category);
-            int bars = (int)(amount);
-            if (bars > 50) bars = 50;
-            for (int j = 0; j < bars; j++) printf("#");
-            for (int j = bars; j < 50; j++) printf(".");
-            printf("| %.2f\n", amount);
+        if (strcmp(transactions[i].type, "EXPENSE") != 0) continue;
+
+        int found = 0;
+        for (int j = 0; j < catCount; j++) {
+            if (strcmp(categories[j], transactions[i].category) == 0) {
+                categorySums[j] += transactions[i].amount;
+                found = 1;
+                break;
+            }
+        }
+        if (!found) {
+            strcpy(categories[catCount], transactions[i].category);
+            categorySums[catCount] = transactions[i].amount;
+            catCount++;
         }
     }
+
+    for (int i = 0; i < catCount; i++) {
+        int b = (int)((categorySums[i] / totalExpenses) * 50);
+        if (b > 50) b = 50;
+        printf("%-15s |", categories[i]);
+        for (int k = 0; k < b; k++) printf("#");
+        for (int k = b; k < 50; k++) printf(".");
+        printf("| %.2f\n", categorySums[i]);
+    }
+}
+
+int login() {
+    char username[50], password[50], fileUser[50], filePass[50];
+    FILE *f = fopen(USER_FILE, "r");
+    if (!f) {
+        printf("User database not found.\n");
+        return 0;
+    }
+
+    printf("Enter username: ");
+    scanf("%s", username);
+    printf("Enter password: ");
+    scanf("%s", password);
+
+    while (fscanf(f, "%s %s", fileUser, filePass) != EOF) {
+        if (strcmp(username, fileUser) == 0 && strcmp(password, filePass) == 0) {
+            strcpy(currentUser, username);
+            fclose(f);
+            return 1;
+        }
+    }
+
+    fclose(f);
+    printf("User not found!\n");
+    return 0;
+}
+
+void registerUser() {
+    char username[50], password[50];
+    FILE *f = fopen(USER_FILE, "a");
+    if (!f) {
+        perror("Error saving data");
+        return;
+    }
+
+    printf("Enter username: ");
+    scanf("%s", username);
+    printf("Create password: ");
+    scanf("%s", password);
+    fprintf(f, "%s %s\n", username, password);
+    fclose(f);
+    printf("Registration successful. Please login.\n");
 }
 
 void deleteUser() {
-    if (!isLoggedIn) {
-        printf("No user logged in to delete.\n");
-        return;
-    }
-    printf("Are you sure you want to delete your account '%s'? (yes/no): ", currentUser);
-    char confirm[10];
-    scanf("%s", confirm);
-    if (strcmp(confirm, "yes") != 0) {
-        printf("Account deletion cancelled.\n");
+    char username[50], fileUser[50], filePass[50];
+    FILE *f = fopen(USER_FILE, "r");
+    if (!f) {
+        printf("User database not found.\n");
         return;
     }
 
-    char filename[MAX_NAME + 15];
-    sprintf(filename, "%s_data.txt", currentUser);
-    remove(filename);
+    printf("Enter username to delete: ");
+    scanf("%s", username);
 
-    FILE* f = fopen(USER_FILE, "r");
-    FILE* temp = fopen("temp.txt", "w");
-    if (!f || !temp) {
-        printf("Error opening files.\n");
-        return;
-    }
-    char uname[MAX_NAME], pword[MAX_PASS];
-    while (fscanf(f, "%s %s", uname, pword) != EOF) {
-        if (strcmp(uname, currentUser) != 0) {
-            fprintf(temp, "%s %s\n", uname, pword);
+    // Check if the user exists
+    int userFound = 0;
+    while (fscanf(f, "%s %s", fileUser, filePass) != EOF) {
+        if (strcmp(username, fileUser) == 0) {
+            userFound = 1;
+            break;
         }
     }
     fclose(f);
-    fclose(temp);
-    remove(USER_FILE);
-    rename("temp.txt", USER_FILE);
 
-    printf("User '%s' and their data have been deleted.\n", currentUser);
-    isLoggedIn = 0;
-    strcpy(currentUser, "");
-    transactionCount = 0;
-    totalIncome = totalExpenses = 0;
+    if (!userFound) {
+        printf("User not found!\n");
+        return;
+    }
+
+    // Confirm deletion
+    char confirm;
+    printf("Are you sure you want to delete user '%s'? (y/n): ", username);
+    scanf(" %c", &confirm);
+    if (confirm != 'y' && confirm != 'Y') {
+        printf("User deletion canceled.\n");
+        return;
+    }
+
+    // Create a temporary file to store users except the one to be deleted
+    FILE *tempFile = fopen("temp_users.txt", "w");
+    f = fopen(USER_FILE, "r");
+    if (!f || !tempFile) {
+        printf("Error opening files.\n");
+        return;
+    }
+
+    while (fscanf(f, "%s %s", fileUser, filePass) != EOF) {
+        if (strcmp(username, fileUser) != 0) {
+            fprintf(tempFile, "%s %s\n", fileUser, filePass);
+        }
+    }
+
+    fclose(f);
+    fclose(tempFile);
+
+    // Replace the old user file with the new one
+    remove(USER_FILE);
+    rename("temp_users.txt", USER_FILE);
+
+    printf("User '%s' deleted successfully.\n", username);
 }
 
 int main() {
-    int choice;
-    while (1) {
-        printf("\n1. Register\n2. Login\nEnter choice: ");
-        if (scanf("%d", &choice) != 1) {
-            printf("Invalid input. Please enter a number.\n");
-            while (getchar() != '\n'); // clear buffer
-            continue;
-        }
+    int choice, auth = 0;
+
+    while (!auth) {
+        printf("1. Register\n2. Login\n3. Delete User\nEnter choice: ");
+        scanf("%d", &choice);
         if (choice == 1) registerUser();
-        else if (choice == 2 && loginUser()) break;
-        else printf("Try again.\n");
+        else if (choice == 2) auth = login();
+        else if (choice == 3) deleteUser();
+        else printf("Invalid choice.\n");
     }
 
-    while (isLoggedIn) {
+    loadTransactions();
+
+    while (1) {
         printf("\n==== Personal Finance Manager (%s) ====\n", currentUser);
         printf("1. Add Transaction\n");
         printf("2. View Balance\n");
         printf("3. View Transactions\n");
         printf("4. Category Report\n");
         printf("5. Graphical Report\n");
-        printf("6. Save & Exit\n");
-        printf("7. Delete Account\n");
+        printf("6. Exit\n");
         printf("Enter your choice: ");
-        if (scanf("%d", &choice) != 1) {
-            printf("Invalid input. Please enter a number.\n");
-            while (getchar() != '\n');
-            continue;
-        }
+        scanf("%d", &choice);
+
         switch (choice) {
             case 1: addTransaction(); break;
             case 2: viewBalance(); break;
             case 3: viewTransactions(); break;
             case 4: categoryReport(); break;
             case 5: showGraphicalReport(); break;
-            case 6: saveToFile(); printf("Goodbye!\n"); return 0;
-            case 7: deleteUser(); break;
-            default: printf("Invalid choice.\n");
+            case 6: saveTransaction(); printf("Goodbye!\n"); exit(0);
+            default: printf("Invalid choice. Try again.\n");
         }
     }
+
     return 0;
 }
+
