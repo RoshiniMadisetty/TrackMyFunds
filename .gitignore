@@ -1,0 +1,7 @@
+*.exe
+*.o
+*.out
+*.dat
+users.txt
+*_transactions.txt
+.vscode/
